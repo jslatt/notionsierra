@@ -18,7 +18,7 @@ let trades = [];
 ///////////////////////////////
 
 
-async function addItem(text) {
+async function addItem(symbol,time,maxhigh,maxlow,qty) {
     try {
       const response = await notion.pages.create({
         parent: { database_id: databaseId },
@@ -27,10 +27,24 @@ async function addItem(text) {
             title:[
               {
                 "text": {
-                  "content": text
+                  "content": symbol
                 }
               }
             ]
+          },
+          "Date": {
+            "date": {
+              "start": time
+            }
+          },
+          "Qty": {
+            "number": Number(qty)
+          },
+          "Max High": {
+              "number":Number(maxhigh)
+          },
+          "Max Low": {
+              "number":Number(maxlow)
           }
         },
       })
@@ -100,9 +114,32 @@ fetch(url, options)
 
 
     // Send Trades to Notion
-    /*for (i=0;i<trades.length;i++) {
-        addItem(JSON.stringify(trades[0]).substring(0,1000))
-    }*/
+    // FOR each position
+    for (i=0;i<trades.length;i++) {
+        let datetime = trades[i][0].DateTimeLogged;
+        let qty = 0;
+        let symbol = trades[i][0].JSON.Symbol
+        let maxhigh = 0.00;
+        let maxlow = 1000000.00;
+        //For each trade
+        for (j=0;j<trades[i].length;j++) {
+           
+            // Set Max Qty
+            if (trades[i][j].JSON.Quantity > qty) {
+                qty = trades[i][j].JSON.Quantity;
+            }
+            if (trades[i][j].JSON.HighPriceDuringPosition > maxhigh) {
+                maxhigh = trades[i][j].JSON.HighPriceDuringPosition;
+                
+            }
+            if (trades[i][j].JSON.LowPriceDuringPosition < maxlow) {
+                maxhigh = trades[i][j].JSON.LowPriceDuringPosition;
+            }
+        }
+        
+        console.log(maxhigh)
+        //addItem(symbol,datetime,maxhigh,maxlow,qty)
+    }
   })
   .catch((err) => console.error("error:" + err));
 
