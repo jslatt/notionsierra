@@ -1,6 +1,48 @@
-const CONFIG = require("./config.json");
 const moment = require("moment");
+// CREDENTIALS
+const CONFIG = require("./config.json");
+
+// NOTION SDK CONFIG
+const { Client } = require("@notionhq/client");
+
+const notion = new Client({
+    auth: CONFIG.NOTION_TOKEN
+})
+
+const databaseId = CONFIG.NOTION_DB_ID;
+
 let trades = [];
+
+///////////////////////////////
+//  COMPUTE + POST TO NOTION //
+///////////////////////////////
+
+
+async function addItem(text) {
+    try {
+      const response = await notion.pages.create({
+        parent: { database_id: databaseId },
+        properties: {
+          title: { 
+            title:[
+              {
+                "text": {
+                  "content": text
+                }
+              }
+            ]
+          }
+        },
+      })
+      console.log(response)
+      console.log("Success! Entry added.")
+    } catch (error) {
+      console.error(error.body)
+    }
+  }
+  
+
+  
 
 /////////////////////////
 //      GET FILLS      //
@@ -46,31 +88,21 @@ fetch(url, options)
         // Add open fills to executions
         for (j = 0; j <= counter; j++) {
           executions.push(data[i + j]);
-          console.log(
-            "EXE ADDED " +
-              j +
-              "/" +
-              i +
-              "   " +
-              data[i + j].JSON.InternalOrderID
-          );
         }
-        console.log("NEW POSITION");
         // Push new set of executions to trades array.
         trades.push(executions);
         counter = 0;
       } else {
         counter++;
-        console.log("OPEN " + counter + "    " + data[i].JSON.InternalOrderID);
       }
     }
+    // Actual RR, High During Pos, Low During Pos, Size
+
+
+    // Send Trades to Notion
+    /*for (i=0;i<trades.length;i++) {
+        addItem(JSON.stringify(trades[0]).substring(0,1000))
+    }*/
   })
   .catch((err) => console.error("error:" + err));
-
-///////////////////////////////
-//  COMPUTE + POST TO NOTION //
-///////////////////////////////
-const { Client } = require("@notionhq/client");
-
-
 
