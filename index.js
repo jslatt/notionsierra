@@ -6,8 +6,8 @@ const CONFIG = require("./config.json");
 const { Client } = require("@notionhq/client");
 
 const notion = new Client({
-    auth: CONFIG.NOTION_TOKEN
-})
+  auth: CONFIG.NOTION_TOKEN,
+});
 
 const databaseId = CONFIG.NOTION_DB_ID;
 
@@ -17,133 +17,108 @@ let trades = [];
 //  COMPUTE + POST TO NOTION //
 ///////////////////////////////
 
-
-async function addItem(symbol,time,maxhigh,maxlow,qty,id) {
-    try {
+async function addItem(id, symbol, volume, pnl, time) {
+  try {
+    // Trade alredy sent?
+    const dup = await notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        or: [
+          {
+            property: "Trade ID",
+            number: {
+              equals: id,
+            },
+          },
+        ],
+      },
+    });
+    // If dup promise returns empty result, post trade.
+    if (dup.results < 1) {
       const response = await notion.pages.create({
         parent: { database_id: databaseId },
         properties: {
-          title: { 
-            title:[
+          title: {
+            title: [
               {
-                "text": {
-                  "content": symbol
-                }
-              }
-            ]
+                text: {
+                  content: symbol,
+                },
+              },
+            ],
           },
-          "Date": {
-            "date": {
-              "start": time
-            }
+          Date: {
+            date: {
+              start: time,
+            },
           },
-          "Qty": {
-            "number": Number(qty)
+          Qty: {
+            number: Number(volume),
           },
-          "Max High": {
-              "number":Number(maxhigh)
-          },
-          "Max Low": {
-              "number":Number(maxlow)
+          PnL: {
+            number: Number(pnl),
           },
           "Trade ID": {
-            "number":Number(id)
-        }
+            number: Number(id),
+          },
+          "Tradervue": {
+            url: "https://tradervue.com/trades/" + id
+          }
         },
-      })
-      console.log(response)
-      console.log("Success! Entry added.")
-    } catch (error) {
-      console.error(error.body)
+      });
     }
-  }
-  
 
-  
+    
+    //console.log(response);
+    //console.log("Success! Entry added.");
+  } catch (error) {
+    console.error(error.body);
+  }
+}
 
 /////////////////////////
 //      GET FILLS      //
 /////////////////////////
 //    1 Day History    //
 /////////////////////////
-const { URLSearchParams } = require("url");
 const fetch = require("node-fetch");
-const encodedParams = new URLSearchParams();
-
-encodedParams.set("AdminUsername", CONFIG.SIERRA_WEB_API_USERNAME);
-encodedParams.set("AdminPassword", CONFIG.SIERRA_WEB_API_PASSWORD);
-encodedParams.set("UserSCUsername", CONFIG.SIERRA_ACTUAL_USERNAME);
-encodedParams.set("Service", "GetTradeOrderFills");
-encodedParams.set(
-  "StartDateTimeInMicroSecondsUTC",
-  moment().subtract(1, "days").unix() * 1000000
-);
-
-let url = "https://www.sierrachart.com/API.php";
+const today = moment().format("MM%2FDD%2FYY");
+let url = "https://www.tradervue.com/api/v1/trades?startdate=" + today;
 
 let options = {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: encodedParams,
+  method: "GET",
+  headers: {
+    Accept: "application/json",
+    "User-Agent": CONFIG.TRADERVUE_USERNAME,
+    Authorization:
+      "Basic " +
+      Buffer.from(
+        CONFIG.TRADERVUE_USERNAME + ":" + CONFIG.TRADERVUE_PASSWORD
+      ).toString("base64"),
+  },
 };
 
 fetch(url, options)
   .then((res) => res.json())
   .then((data) => {
-    /////////////////////////
-    //  PARSE & CLEAN DATA //
-    /////////////////////////
-    let counter = 0;
-
-    // Iterate JSON Object from End
-    for (i = Object.keys(data).length - 1; i > -1; i--) {
-      // If fill is closing position
-      if (data[i].JSON.PositionQuantity == 0) {
-        // WARNING WILL BREAK IF TRADING MORE THAN ONE PRODUCT
-        // Get counter fills back added
-        let executions = [];
-        // Add open fills to executions
-        for (j = 0; j <= counter; j++) {
-          executions.push(data[i + j]);
-        }
-        // Push new set of executions to trades array.
-        trades.push(executions);
-        counter = 0;
-      } else {
-        counter++;
-      }
-    }
-    // Actual RR, High During Pos, Low During Pos, Size
-
-
-    // Send Trades to Notion
-    // FOR each position
-    for (i=0;i<trades.length;i++) {
-        let datetime = trades[i][0].DateTimeLogged;
-        let qty = 0;
-        let symbol = trades[i][0].JSON.Symbol
-        let maxhigh = 0.00;
-        let maxlow = 1000000.00;
-        let id = trades[i][0].JSON.ServiceOrderID
-        //For each trade
-        for (j=0;j<trades[i].length;j++) {
-           
-            // Set Max Qty
-            if (trades[i][j].JSON.Quantity > qty) {
-                qty = trades[i][j].JSON.Quantity;
-            }
-            if (trades[i][j].JSON.HighPriceDuringPosition > maxhigh) {
-                maxhigh = trades[i][j].JSON.HighPriceDuringPosition;
-                
-            }
-            if (trades[i][j].JSON.LowPriceDuringPosition < maxlow) {
-                maxhigh = trades[i][j].JSON.LowPriceDuringPosition;
-            }
-        }
-        
-        console.log(maxhigh)
-        addItem(symbol,datetime,maxhigh,maxlow,qty,id)
+    // Iterate trades and
+    for (i = 0; i < Object.values(data.trades).length; i++) {
+      /*trades.push({
+        id: data.trades[i].id,
+        symbol: data.trades[i].symbol,
+        volume: data.trades[i].volume,
+        pnl: data.trades[i].native_pl,
+        time: data.trades[i].end_datetime,
+      })*/
+      addItem(
+        data.trades[i].id,
+        data.trades[i].symbol,
+        data.trades[i].volume,
+        data.trades[i].native_pl,
+        data.trades[i].end_datetime
+      );
     }
   })
   .catch((err) => console.error("error:" + err));
 
+//addItem(symbol,datetime,maxhigh,maxlow,qty,id)
