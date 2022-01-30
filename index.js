@@ -18,7 +18,7 @@ let trades = [];
 ///////////////////////////////
 
 
-async function addItem(symbol,time,maxhigh,maxlow,qty) {
+async function addItem(symbol,time,maxhigh,maxlow,qty,id) {
     try {
       const response = await notion.pages.create({
         parent: { database_id: databaseId },
@@ -45,7 +45,10 @@ async function addItem(symbol,time,maxhigh,maxlow,qty) {
           },
           "Max Low": {
               "number":Number(maxlow)
-          }
+          },
+          "Trade ID": {
+            "number":Number(id)
+        }
         },
       })
       console.log(response)
@@ -121,6 +124,7 @@ fetch(url, options)
         let symbol = trades[i][0].JSON.Symbol
         let maxhigh = 0.00;
         let maxlow = 1000000.00;
+        let id = trades[i][0].JSON.ServiceOrderID
         //For each trade
         for (j=0;j<trades[i].length;j++) {
            
@@ -138,7 +142,7 @@ fetch(url, options)
         }
         
         console.log(maxhigh)
-        //addItem(symbol,datetime,maxhigh,maxlow,qty)
+        addItem(symbol,datetime,maxhigh,maxlow,qty,id)
     }
   })
   .catch((err) => console.error("error:" + err));
